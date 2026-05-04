@@ -1,6 +1,6 @@
 # Decisão Épica
 
-Aplicativo mobile de roleta interativa para auxiliar na tomada de decisões. Crie roletas personalizadas, defina pesos para cada opção e deixe a sorte decidir.
+Aplicativo mobile de roleta interativa com o intuito de substituir opções pagas, inspirado por aplicativos usados em trends do Tiktok.
 
 ## Tecnologias
 
