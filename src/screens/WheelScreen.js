@@ -85,60 +85,75 @@ export const WheelScreen = ({ route, navigation }) => {
     });
   }, [segments]);
 
-  const rotation = useMemo(
-    () => Animated.modulo(spinValue, 1).interpolate({
+const rotation = useMemo(
+  () =>
+    spinValue.interpolate({
       inputRange: [0, 1],
       outputRange: ['0deg', '360deg'],
+      extrapolate: 'extend',
     }),
-    [spinValue]
-  );
+  [spinValue]
+);
 
-  const handleSpin = useCallback(() => {
-    if (!segments.length) {
-      Alert.alert('Ops!', 'Adicione opções antes de girar.');
-      return;
-    }
-    if (spinning) {
-      return;
-    }
-    const result = chooseWeightedSegment(segments);
-    if (!result) {
-      Alert.alert('Erro', 'Não foi possível selecionar uma opção.');
-      return;
-    }
+const handleSpin = useCallback(() => {
+  if (!segments.length || spinning) return;
 
-    // Se a animação estiver desativada, navegar direto para o resultado
-    if (!animationEnabled) {
-      navigation.navigate('Result', {
-        roletaId: roleta.id,
-        option: result.segment,
-      });
-      return;
-    }
+  const result = chooseWeightedSegment(segments);
+  if (!result) return;
 
-    // Animação ativada - executar animação normal
-    const extraOffset = (Math.random() - 0.5) * Math.min(result.segment.sweepAngle, 40);
-    const landingAngle = (result.landingAngle + extraOffset + 360) % 360;
-    const baseSpins = Math.floor(Math.random() * 3) + 5;
-    const spinOffset = 360 - landingAngle;
-    const finalRotation = baseSpins * 360 + spinOffset;
-    const nextValue = rotationSeed.current + finalRotation / 360;
+  if (!animationEnabled) {
+    navigation.navigate('Result', { roletaId: roleta.id, option: result.segment });
+    return;
+  }
 
-    setSpinning(true);
-    Animated.timing(spinValue, {
-      toValue: nextValue,
-      duration: 4600,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
+  setSpinning(true);
+
+  // O spinValue conta voltas completas. rotationSeed guarda a fração atual (0 a 1).
+  // 1 volta = 360°. A interpolação transforma 0..1 em 0deg..360deg.
+
+  // Ângulo onde o ponteiro está (topo da tela = 270° no sistema SVG)
+  const POINTER_ANGLE = 270;
+
+  // Centro do segmento sorteado (em graus, 0° = 3h no SVG)
+  const targetCenter = result.segment.startAngle + result.segment.sweepAngle / 2;
+
+  // Ângulo final da roleta: ponteiro deve apontar para o centro do segmento
+  // No SVG, roda-se a roleta em (POINTER_ANGLE - targetCenter) graus
+  const stopAtDeg = (POINTER_ANGLE - targetCenter + 360) % 360;
+
+  // Converte graus para "voltas" (fração)
+  const stopAt = stopAtDeg / 360;
+
+  // Posição atual da roleta em fração (0 a 1)
+  const currentFrac = rotationSeed.current % 1;
+
+  // Distância para frente até o alvo
+  let delta = stopAt - currentFrac;
+  if (delta <= 0) delta += 1;
+
+  // Pelo menos 5 voltas completas para o efeito visual
+  const totalSpins = delta + 5;
+  const nextValue = rotationSeed.current + totalSpins;
+
+  // Resetar para começar do ângulo atual
+  spinValue.setValue(rotationSeed.current);
+
+  Animated.timing(spinValue, {
+    toValue: nextValue,
+    duration: 5000,
+    easing: Easing.out(Easing.bezier(0.2, 0, 0, 1)),
+    useNativeDriver: true,
+  }).start(({ finished }) => {
+    if (finished) {
       rotationSeed.current = nextValue % 1;
       setSpinning(false);
       navigation.navigate('Result', {
         roletaId: roleta.id,
         option: result.segment,
       });
-    });
-  }, [spinning, animationEnabled, segments, navigation, roleta, spinValue]);
+    }
+  });
+}, [spinning, animationEnabled, segments, navigation, roleta, spinValue]);
 
   if (!roleta) {
     return (
@@ -196,6 +211,7 @@ export const WheelScreen = ({ route, navigation }) => {
       />
     </SafeAreaView>
   );
+
 };
 
 const styles = StyleSheet.create({
